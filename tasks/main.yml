@@ -1,0 +1,46 @@
+- name: Installing MariaDB required package[s]
+  yum: name={{ item }} state=installed
+  with_items:
+    - mariadb-server
+    - mariadb
+    - MySQL-python
+  register: mariadb_installed
+  when: ansible_distribution_major_version|int >=7
+
+- name: Installing MySQL required package[s]
+  yum: name={{ item }} state=installed
+  with_items:
+    - mysql-server
+    - mysql
+    - MySQL-python
+  register: mysql_installed
+  when: ansible_distribution_major_version|int <=6
+
+- name: Configuring my.cnf [mysql]
+  template: src=my.cnf.j2 dest=/etc/my.cnf owner=root group=root mode=644
+  when: ansible_distribution_major_version|int <=6
+
+- name: Configuring server.cnf [mariadb]
+  template: src=server.cnf.j2 dest=/etc/my.cnf.d/server.cnf owner=root group=root mode=644
+  when: ansible_distribution_major_version|int >=7
+
+- name: Starting MySQL
+  service: name=mysqld state=started enabled=yes
+  when: ansible_distribution_version[0] == "6"
+
+- name: Starting MariaDB
+  service: name=mariadb state=started enabled=yes
+  when: ansible_distribution_major_version|int >= 7
+
+- name: Ensuring test database is deleted
+  mysql_db: name=test state=absent
+  
+- name: Configuring mysql root password
+  mysql_user: name=root password={{ mysql_root_password }}
+  when: mysql_installed.changed or mariadb_installed.changed
+
+- name: Configuring root my.cnf
+  template: src=../templates/user-my.cnf.j2 dest=/root/.my.cnf mode=0640 owner=root group=root
+ 
+- name: Allow a little bit of swappiness
+  sysctl: name="vm.swappiness" value=5 sysctl_set=true reload=yes
